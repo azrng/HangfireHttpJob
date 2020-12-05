@@ -2,8 +2,6 @@
 using Microsoft.Extensions.Configuration;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 
 namespace JobsServer
 {
@@ -61,10 +59,12 @@ namespace JobsServer
         /// 使用redis
         /// </summary>
         public bool UseRedis => Convert.ToBoolean(Configuration["hangfire.UseRedis"]);
+
         /// <summary>
         /// 使用mysql
         /// </summary>
         public bool UseMySql => Convert.ToBoolean(Configuration["hangfire.UseMySql"]);
+
         /// <summary>
         /// 使用sqlserver
         /// </summary>
@@ -84,6 +84,7 @@ namespace JobsServer
         ///  使用redis连接
         /// </summary>
         public string HangfireRedisConnectionString => Configuration.GetConnectionString("hangfire.redis");
+
         ///// <summary>
         ///// 使用Sqlite
         ///// </summary>
@@ -95,48 +96,60 @@ namespace JobsServer
         public List<HealthCheckInfo> HostServers { get; } = new List<HealthCheckInfo>();
 
         #region 邮件相关配置
+
         /// <summary>
         /// SMTP地址
         /// </summary>
         public string SMTPServerAddress => Configuration["SMTPConfig:SMTPServerAddress"];
+
         /// <summary>
         /// SMTP端口
         /// </summary>
         public int SMTPPort => Convert.ToInt32(Configuration["SMTPConfig:SMTPPort"]);
+
         /// <summary>
         /// 校验密码
         /// </summary>
         public string SMTPPwd => Configuration["SMTPConfig:SMTPPwd"];
+
         /// <summary>
         /// 发送者邮箱
         /// </summary>
         public string SendMailAddress => Configuration["SMTPConfig:SendMailAddress"];
+
         /// <summary>
         /// 邮件标题
         /// </summary>
         public string SMTPSubject => Configuration["SMTPConfig:SMTPSubject"];
+
         /// <summary>
         /// 接收者邮箱
         /// </summary>
         private List<Emails> SendList { get; } = new List<Emails>();
+
         /// <summary>
         /// 接收者邮箱
         /// </summary>
         public List<string> SendMailList { get; set; } = new List<string>();
+
         /// <summary>
         /// 使用后台进程
         /// </summary>
         public bool UseBackWorker => Convert.ToBoolean(Configuration["UseBackWorker"]);
+
         /// <summary>
         /// 后台进程
         /// </summary>
         public BackWorker backWorker = new BackWorker();
+
         /// <summary>
         /// 是否使用apollo配置中心
         /// </summary>
         public bool UseApollo => Convert.ToBoolean(Configuration["hangfire.UseApollo"]);
+
         #endregion
     }
+
     public class Emails
     {
         public string Email { get; set; }

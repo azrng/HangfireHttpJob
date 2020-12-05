@@ -659,6 +659,8 @@
 
             $('#addhttpJob_save-model').click(function () {
                 var url = $(this).data("url");
+                console.log(url);
+                console.log(JSON.stringify(window.jsonEditor.get()));
                 if (!url) return;
                 var settings = {
                     "async": true,

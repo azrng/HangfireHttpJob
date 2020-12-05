@@ -1,17 +1,16 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Http;
+﻿using Hangfire;
+using Hangfire.HttpJob.Server;
 using Microsoft.AspNetCore.Mvc;
-using Hangfire.Server;
-using Hangfire;
-using Hangfire.Storage;
+using System;
+using System.Collections.Generic;
 
 namespace JobsServer.Controllers
 {
-    [Produces("application/json")]
-    [Route("api/AddJobs")]
+    /// <summary>
+    /// 通过接口形式去添加定时任务的方法
+    /// </summary>
+    [Route("api/[controller]/[action]")]
+    [ApiController]
     public class AddJobsController : Controller
     {
         /// <summary>
@@ -19,13 +18,13 @@ namespace JobsServer.Controllers
         /// </summary>
         /// <param name="httpJob"></param>
         /// <returns></returns>
-        [HttpPost, Route("AddBackGroundJob")]
-        public JsonResult AddBackGroundJob([FromBody] Hangfire.HttpJob.Server.HttpJobItem httpJob)
+        [HttpPost]
+        public JsonResult AddBackGroundJob([FromBody] HttpJobItem httpJob)
         {
             var addreslut = string.Empty;
             try
             {
-                addreslut = BackgroundJob.Enqueue(() => Hangfire.HttpJob.Server.HttpJob.Excute(httpJob, httpJob.JobName,httpJob.QueueName,httpJob.IsRetry, null));
+                addreslut = BackgroundJob.Enqueue(() => HttpJob.Excute(httpJob, httpJob.JobName, httpJob.QueueName, httpJob.IsRetry, null));
             }
             catch (Exception ec)
             {
@@ -39,12 +38,12 @@ namespace JobsServer.Controllers
         /// </summary>
         /// <param name="httpJob"></param>
         /// <returns></returns>
-        [HttpPost, Route("AddOrUpdateRecurringJob")]
-        public JsonResult AddOrUpdateRecurringJob([FromBody] Hangfire.HttpJob.Server.HttpJobItem httpJob)
+        [HttpPost]
+        public JsonResult AddOrUpdateRecurringJob(HttpJobItem httpJob)
         {
             try
             {
-                RecurringJob.AddOrUpdate(httpJob.JobName, () => Hangfire.HttpJob.Server.HttpJob.Excute(httpJob, httpJob.JobName, httpJob.QueueName, httpJob.IsRetry, null), httpJob.Corn, TimeZoneInfo.Local);
+                RecurringJob.AddOrUpdate(httpJob.JobName, () => HttpJob.Excute(httpJob, httpJob.JobName, httpJob.QueueName, httpJob.IsRetry, null), httpJob.Corn, TimeZoneInfo.Local);
             }
             catch (Exception ec)
             {
@@ -58,7 +57,7 @@ namespace JobsServer.Controllers
         /// </summary>
         /// <param name="jobname"></param>
         /// <returns></returns>
-        [HttpGet,Route("DeleteJob")]
+        [HttpGet]
         public JsonResult DeleteJob(string jobname)
         {
             try
@@ -71,12 +70,13 @@ namespace JobsServer.Controllers
             }
             return Json(new Message() { Code = true, ErrorMessage = "" });
         }
+
         /// <summary>
         /// 手动触发一个任务
         /// </summary>
         /// <param name="jobname"></param>
         /// <returns></returns>
-        [HttpGet, Route("TriggerRecurringJob")]
+        [HttpGet]
         public JsonResult TriggerRecurringJob(string jobname)
         {
             try
@@ -89,18 +89,19 @@ namespace JobsServer.Controllers
             }
             return Json(new Message() { Code = true, ErrorMessage = "" });
         }
+
         /// <summary>
         /// 添加一个延迟任务
         /// </summary>
         /// <param name="httpJob">httpJob.DelayFromMinutes（延迟多少分钟执行）</param>
         /// <returns></returns>
-        [HttpPost, Route("AddScheduleJob")]
-        public JsonResult AddScheduleJob([FromBody] Hangfire.HttpJob.Server.HttpJobItem httpJob)
+        [HttpPost]
+        public JsonResult AddScheduleJob([FromBody] HttpJobItem httpJob)
         {
             var reslut = string.Empty;
             try
             {
-                reslut = BackgroundJob.Schedule(() => Hangfire.HttpJob.Server.HttpJob.Excute(httpJob, httpJob.JobName, httpJob.QueueName, httpJob.IsRetry, null), TimeSpan.FromMinutes(httpJob.DelayFromMinutes));
+                reslut = BackgroundJob.Schedule(() => HttpJob.Excute(httpJob, httpJob.JobName, httpJob.QueueName, httpJob.IsRetry, null), TimeSpan.FromMinutes(httpJob.DelayFromMinutes));
             }
             catch (Exception ec)
             {
@@ -108,13 +109,14 @@ namespace JobsServer.Controllers
             }
             return Json(new Message() { Code = true, ErrorMessage = "" });
         }
+
         /// <summary>
         /// 添加连续任务,多个任务依次执行，只执行一次
         /// </summary>
         /// <param name="httpJob"></param>
         /// <returns></returns>
-        [HttpPost, Route("AddContinueJob")]
-        public JsonResult AddContinueJob([FromBody] List<Hangfire.HttpJob.Server.HttpJobItem> httpJobItems)
+        [HttpPost]
+        public ActionResult AddContinueJob([FromBody] List<HttpJobItem> httpJobItems)
         {
             var reslut = string.Empty;
             var jobid = string.Empty;
@@ -128,26 +130,28 @@ namespace JobsServer.Controllers
                     }
                     else
                     {
-                        jobid = BackgroundJob.Enqueue(() => Hangfire.HttpJob.Server.HttpJob.Excute(k, k.JobName, k.QueueName, k.IsRetry, null));
+                        jobid = BackgroundJob.Enqueue(() => HttpJob.Excute(k, k.JobName, k.QueueName, k.IsRetry, null));
                     }
                 });
                 reslut = "true";
             }
             catch (Exception ec)
             {
-                return Json(new Message() { Code = false, ErrorMessage = ec.ToString() });
+                return Ok(new Message() { Code = false, ErrorMessage = ec.ToString() });
             }
-            return Json(new Message() { Code = true, ErrorMessage = "" });
+            return Ok(new Message() { Code = true, ErrorMessage = "" });
         }
+
         /// <summary>
         /// 执行连续任务
         /// </summary>
         /// <param name="httpJob"></param>
-        public void RunContinueJob(Hangfire.HttpJob.Server.HttpJobItem httpJob)
+        public void RunContinueJob(HttpJobItem httpJob)
         {
-            BackgroundJob.Enqueue(() => Hangfire.HttpJob.Server.HttpJob.Excute(httpJob, httpJob.JobName, httpJob.QueueName, httpJob.IsRetry, null));
+            BackgroundJob.Enqueue(() => HttpJob.Excute(httpJob, httpJob.JobName, httpJob.QueueName, httpJob.IsRetry, null));
         }
     }
+
     /// <summary>
     /// 返回消息
     /// </summary>

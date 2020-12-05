@@ -1,32 +1,28 @@
-﻿using Hangfire.Console;
-using Hangfire.Logging;
+﻿using CommonUtils;
+using Hangfire.Console;
+using Hangfire.HttpJob.Support;
 using Hangfire.Server;
+using MailKit.Net.Smtp;
+using MimeKit;
 using Newtonsoft.Json;
+using NLog;
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
-using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
-using MailKit;
-using MimeKit;
-using MailKit.Net.Smtp;
-using Hangfire.HttpJob.Support;
-using CommonUtils;
-using NLog;
-using System.Collections.Generic;
 
 namespace Hangfire.HttpJob.Server
 {
     public class HttpJob
     {
-        /// <summary>
-        /// 是否使用apollo配置中心
-        /// </summary>
-        private static readonly bool UseApollo = ConfigSettings.Instance.UseApollo;
-        private static readonly Logger logger = new LogFactory().GetCurrentClassLogger();
+
+
+        private static readonly Logger _logger = new LogFactory().GetCurrentClassLogger();
         public static HangfireHttpJobOptions HangfireHttpJobOptions;
-        private static MimeMessage mimeMessage;
+        private static MimeMessage _mimeMessage;
+
         /// <summary>
         /// 发送邮件
         /// </summary>
@@ -38,47 +34,38 @@ namespace Hangfire.HttpJob.Server
         {
             try
             {
-                mimeMessage = new MimeMessage();
-                mimeMessage.From.Add(new MailboxAddress(UseApollo ? ConfigSettings.Instance.SendMailAddress : HangfireHttpJobOptions.SendMailAddress));
+                _mimeMessage = new MimeMessage();
+                _mimeMessage.From.Add(new MailboxAddress(HangfireHttpJobOptions.SendMailAddress));
                 List<Emails> SendMailList = new List<Emails>();
-                if (UseApollo)
+
+                SendMailList = JsonConvert.DeserializeObject<List<Emails>>(ConfigSettings.Instance.SendMailList);
+                SendMailList.ForEach(k =>
                 {
-                    SendMailList = JsonConvert.DeserializeObject<List<Emails>>(ConfigSettings.Instance.SendMailList);
-                    SendMailList.ForEach(k =>
-                    {
-                        mimeMessage.To.Add(new MailboxAddress(k.Email));
-                    });
-                }
-                else
-                {
-                    HangfireHttpJobOptions.SendToMailList.ForEach(k =>
-                    {
-                        mimeMessage.To.Add(new MailboxAddress(k));
-                    });
-                }
-                mimeMessage.Subject = UseApollo ? ConfigSettings.Instance.SMTPSubject : HangfireHttpJobOptions.SMTPSubject;
+                    _mimeMessage.To.Add(new MailboxAddress(k.Email));
+                });
+
+                _mimeMessage.Subject = HangfireHttpJobOptions.SMTPSubject;
                 var builder = new BodyBuilder
                 {
                     //builder.TextBody = $"执行出错,任务名称【{item.JobName}】,错误详情：{ex}";
                     HtmlBody = SethtmlBody(jobname, Url, $"执行出错，错误详情:{exception}")
                 };
-                mimeMessage.Body = builder.ToMessageBody();
+                _mimeMessage.Body = builder.ToMessageBody();
                 var client = new SmtpClient();
-                client.Connect(UseApollo ? ConfigSettings.Instance.SMTPServerAddress : HangfireHttpJobOptions.SMTPServerAddress,
-                    UseApollo ? ConfigSettings.Instance.SMTPPort : HangfireHttpJobOptions.SMTPPort, true);     //连接服务
+                client.Connect(HangfireHttpJobOptions.SMTPServerAddress, HangfireHttpJobOptions.SMTPPort, true);     //连接服务
                 client.AuthenticationMechanisms.Remove("XOAUTH2");
-                client.Authenticate(UseApollo ? ConfigSettings.Instance.SendMailAddress : HangfireHttpJobOptions.SendMailAddress,
-                   UseApollo ? ConfigSettings.Instance.SMTPPwd : HangfireHttpJobOptions.SMTPPwd); //验证账号密码
-                client.Send(mimeMessage);
+                client.Authenticate(HangfireHttpJobOptions.SendMailAddress, HangfireHttpJobOptions.SMTPPwd); //验证账号密码
+                client.Send(_mimeMessage);
                 client.Disconnect(true);
             }
             catch (Exception ee)
             {
-                logger.Info($"邮件服务异常，异常为：{ee}");
+                _logger.Info($"邮件服务异常，异常为：{ee}");
                 return false;
             }
             return true;
         }
+
         /// <summary>
         /// 设置httpclient
         /// </summary>
@@ -105,10 +92,10 @@ namespace Hangfire.HttpJob.Server
             {
                 var byteArray = Encoding.ASCII.GetBytes(item.BasicUserName + ":" + item.BasicPassword);
                 HttpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", Convert.ToBase64String(byteArray));
-
             }
             return HttpClient;
         }
+
         /// <summary>
         /// signalR推送使用
         /// </summary>
@@ -138,6 +125,7 @@ namespace Hangfire.HttpJob.Server
             string result = httpcontent.ReadAsStringAsync().GetAwaiter().GetResult();
             return result;
         }
+
         /// <summary>
         /// 邮件模板
         /// </summary>
@@ -147,7 +135,7 @@ namespace Hangfire.HttpJob.Server
         /// <returns></returns>
         private static string SethtmlBody(string jobname, string url, string exception)
         {
-            var title = UseApollo ? ConfigSettings.Instance.SMTPSubject : HangfireHttpJobOptions.SMTPSubject;
+            var title = HangfireHttpJobOptions.SMTPSubject;
             var htmlbody = $@"<h3 align='center'>{title}</h3>
                             <h3>执行时间：</h3>
                             <p>
@@ -159,7 +147,7 @@ namespace Hangfire.HttpJob.Server
                             <h3>
                                 请求路径：{url}
                             </h3>
-                            <h3><span></span> 
+                            <h3><span></span>
                                 执行结果：<br/>
                             </h3>
                             <p>
@@ -167,6 +155,7 @@ namespace Hangfire.HttpJob.Server
                             </p> ";
             return htmlbody;
         }
+
         public static HttpRequestMessage PrepareHttpRequestMessage(HttpJobItem item)
         {
             var request = new HttpRequestMessage(new HttpMethod(item.Method), item.Url);
@@ -181,21 +170,24 @@ namespace Hangfire.HttpJob.Server
             }
             return request;
         }
-        private const int num = 3;
+
+        private const int _num = 3;
+
         /// <summary>
         /// 执行任务，DelaysInSeconds(重试时间间隔/单位秒)
         /// </summary>
         /// <param name="item"></param>
         /// <param name="jobName"></param>
         /// <param name="context"></param>
-        [AutomaticRetrySet(Attempts = num, DelaysInSeconds = new[] { 20, 30, 60 }, LogEvents = true, OnAttemptsExceeded = AttemptsExceededAction.Fail)]
-        [AutomaticRetry(Attempts =0,OnAttemptsExceeded =AttemptsExceededAction.Fail)]
+        [AutomaticRetrySet(Attempts = _num, DelaysInSeconds = new[] { 20, 30, 60 }, LogEvents = true, OnAttemptsExceeded = AttemptsExceededAction.Fail)]
+        [AutomaticRetry(Attempts = 0, OnAttemptsExceeded = AttemptsExceededAction.Fail)]
         [DisplayName("Args : [  JobName : {1}  |  QueueName : {2}  |  IsRetry : {3} ]")]
         [JobFilter(timeoutInSeconds: 3600)]
-        public static void Excute(HttpJobItem item, string jobName = null,string queuename=null,bool isretry=false, PerformContext context = null)
+        public static void Excute(HttpJobItem item, string jobName = null, string queuename = null, bool isretry = false, PerformContext context = null)
         {
             try
             {
+                System.Console.WriteLine(DateTime.Now.ToLongTimeString());
                 //此处信息会显示在执行结果日志中
                 context.SetTextColor(ConsoleTextColor.Yellow);
                 context.WriteLine($"任务开始执行,执行时间{DateTime.Now.ToString()}");
@@ -216,15 +208,16 @@ namespace Hangfire.HttpJob.Server
                 context.SetTextColor(ConsoleTextColor.Red);
                 //signalR推送
                 //SendRequest(UseApollo?ConfigSettings.Instance.ServiceAddress:ConfigSettings.Instance.URL+"/api/Publish/EveryOne", "测试");
-                if (count == "3"&&ConfigSettings.Instance.UseEmail)//重试达到三次的时候发邮件通知
+                if (count == "3" && ConfigSettings.Instance.UseEmail)//重试达到三次的时候发邮件通知
                 {
                     SendEmail(item.JobName, item.Url, ex.ToString());
                 }
-                logger.Error(ex, "HttpJob.Excute");
+                _logger.Error(ex, "HttpJob.Excute");
                 context.WriteLine($"执行出错：{ex.Message}");
                 throw;//不抛异常不会执行重试操作
             }
         }
+
         /// <summary>
         /// 发送请求
         /// </summary>
@@ -254,7 +247,4 @@ namespace Hangfire.HttpJob.Server
             return httpResponse;
         }
     }
-
-
-
 }

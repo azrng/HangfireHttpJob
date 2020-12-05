@@ -10,7 +10,7 @@ namespace JobsServer.Hubs
     {
         /// <summary>
         /// 用户组
-        /// </summary>
+        /// </summary> 
         public string GroupName { get; set; }
 
         /// <summary>
